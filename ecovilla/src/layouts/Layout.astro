@@ -1,0 +1,62 @@
+---
+const { title = 'Ecovilla' } = Astro.props;
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title}</title>
+  </head>
+  <body>
+    <header class="barra">
+      <a href="/" class="logo">🌱 Ecovilla</a>
+      <nav>
+        <a href="/catalogo">Catálogo</a>
+        <a href="/carrito">Carrito</a>
+        <a href="/mis-pedidos">Mis pedidos</a>
+        <a href="/ser-vendedor">Quiero vender</a>
+        <a href="/ser-transportador">Quiero ser transportador</a>
+        <a href="/panel-comprador">Mi panel</a>
+        <a href="/entrar">Entrar</a>
+      </nav>
+    </header>
+
+    <slot />
+
+    <footer class="pie">
+      <p>Ecovilla — productos del campo directos a tu mesa.</p>
+    </footer>
+  </body>
+</html>
+
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: #fdfbf5;
+    color: #222;
+  }
+  .barra {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    padding: 1rem 2rem;
+    background: #1f7a4d;
+  }
+  .logo { color: #fff; font-weight: 700; font-size: 1.2rem; text-decoration: none; }
+  nav { display: flex; flex-wrap: wrap; gap: 1.2rem; }
+  nav a { color: #eafaf1; text-decoration: none; font-size: 0.95rem; }
+  nav a:hover { text-decoration: underline; }
+  .pie {
+    margin-top: 4rem;
+    padding: 2rem;
+    text-align: center;
+    color: #777;
+    font-size: 0.9rem;
+  }
+</style>

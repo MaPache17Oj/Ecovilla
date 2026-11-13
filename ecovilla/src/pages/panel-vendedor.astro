@@ -1,0 +1,281 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { supabase } from '../lib/supabase';
+---
+
+<Layout title="Panel de vendedor">
+  <header class="barra">
+    <span class="marca">Ecovilla</span>
+    <div class="derecha">
+      <span id="saludo">Cargando...</span>
+      <button id="cerrar-sesion" class="btn-salir">Cerrar sesión</button>
+    </div>
+  </header>
+
+  <main class="contenedor">
+    <section class="tarjeta">
+      <h2>Mi catálogo</h2>
+      <div id="mi-catalogo"><p>Cargando...</p></div>
+    </section>
+
+    <section class="tarjeta">
+      <h2>Publicar un producto</h2>
+      <form id="form-producto">
+        <label for="nombre">Nombre *</label>
+        <input id="nombre" name="nombre" type="text" required />
+
+        <label for="precio">Precio *</label>
+        <input id="precio" name="precio" type="number" min="0" step="1" required />
+
+        <label for="descripcion">Descripción</label>
+        <textarea id="descripcion" name="descripcion" rows="4"></textarea>
+
+        <label for="imagen">Imagen</label>
+        <input id="imagen" name="imagen" type="file" accept="image/*" />
+
+        <button type="submit" class="btn-publicar">Publicar</button>
+        <p id="mensaje"></p>
+      </form>
+    </section>
+  </main>
+</Layout>
+
+<script>
+  import { supabase } from '../lib/supabase';
+
+  const saludo = document.getElementById('saludo') as HTMLSpanElement;
+  const catalogo = document.getElementById('mi-catalogo') as HTMLDivElement;
+  const form = document.getElementById('form-producto') as HTMLFormElement;
+  const mensaje = document.getElementById('mensaje') as HTMLParagraphElement;
+
+  const { data: { session } } = await supabase.auth.getSession();
+
+  if (!session) {
+    window.location.href = '/entrar';
+  } else {
+    const { data: perfil } = await supabase
+      .from('perfiles')
+      .select('rol, nombre')
+      .eq('id', session.user.id)
+      .maybeSingle();
+
+    if (perfil?.rol !== 'vendedor') {
+      window.location.href = '/panel-comprador';
+    } else {
+      saludo.textContent = `Hola, ${perfil.nombre ?? session.user.email}. Aquí va tu catálogo.`;
+      cargarCatalogo(session.user.id);
+    }
+  }
+
+  async function cargarCatalogo(vendedorId: string) {
+    const { data: productos, error } = await supabase
+      .from('productos')
+      .select('id, nombre, precio, imagen_url')
+      .eq('vendedor_id', vendedorId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      catalogo.innerHTML = '<p>Error: ' + error.message + '</p>';
+      return;
+    }
+
+    if (!productos || productos.length === 0) {
+      catalogo.innerHTML = '<p>Todavía no has publicado productos.</p>';
+      return;
+    }
+
+    catalogo.innerHTML = '<ul class="lista">' + productos.map((p) =>
+      `<li>
+        ${p.imagen_url ? `<img src="${p.imagen_url}" alt="${p.nombre}" class="miniatura" />` : ''}
+        <span>${p.nombre}</span>
+        <span class="precio">$${p.precio.toLocaleString('es-CO')}</span>
+      </li>`
+    ).join('') + '</ul>';
+  }
+
+  document.getElementById('cerrar-sesion')?.addEventListener('click', async () => {
+    await supabase.auth.signOut();
+    window.location.href = '/entrar';
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    mensaje.textContent = 'Publicando...';
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      window.location.href = '/entrar';
+      return;
+    }
+
+    const nombre = (document.getElementById('nombre') as HTMLInputElement).value.trim();
+    const precio = Number((document.getElementById('precio') as HTMLInputElement).value);
+    const descripcion = (document.getElementById('descripcion') as HTMLTextAreaElement).value.trim();
+    const archivo = (document.getElementById('imagen') as HTMLInputElement).files?.[0];
+
+    let imagen_url: string | null = null;
+
+    if (archivo) {
+      const extension = archivo.name.split('.').pop();
+      const ruta = `${session.user.id}/${Date.now()}.${extension}`;
+
+      const { error: errorSubida } = await supabase.storage
+        .from('productos')
+        .upload(ruta, archivo);
+
+      if (errorSubida) {
+        mensaje.textContent = 'Error subiendo la imagen: ' + errorSubida.message;
+        return;
+      }
+
+      const { data: urlPublica } = supabase.storage
+        .from('productos')
+        .getPublicUrl(ruta);
+
+      imagen_url = urlPublica.publicUrl;
+    }
+
+    const { error } = await supabase.from('productos').insert({
+      nombre,
+      precio,
+      descripcion,
+      imagen_url,
+      vendedor_id: session.user.id,
+    });
+
+    if (error) {
+      mensaje.textContent = 'Error: ' + error.message;
+      return;
+    }
+
+    mensaje.textContent = 'Producto publicado.';
+    form.reset();
+    cargarCatalogo(session.user.id);
+  });
+</script>
+
+<style>
+  .barra {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    background: #fff;
+    border-bottom: 1px solid #e5e5e5;
+  }
+
+  .marca {
+    font-weight: 700;
+    color: #1f7a4d;
+  }
+
+  .derecha {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    color: #666;
+    font-size: 0.9rem;
+  }
+
+  .btn-salir {
+    padding: 0.45rem 1rem;
+    background: #fff;
+    border: 1px solid #1f7a4d;
+    color: #1f7a4d;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+
+  .contenedor {
+    max-width: 800px;
+    margin: 2.5rem auto;
+    padding: 0 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .tarjeta {
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    border-radius: 10px;
+    padding: 1.5rem;
+  }
+
+  .tarjeta h2 {
+    margin-top: 0;
+    color: #1f7a4d;
+  }
+
+  .lista {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .lista li {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    border-bottom: 1px solid #f0f0f0;
+    padding-bottom: 0.75rem;
+  }
+
+  .miniatura {
+    width: 56px;
+    height: 56px;
+    object-fit: cover;
+    border-radius: 6px;
+  }
+
+  .precio {
+    margin-left: auto;
+    font-weight: 700;
+  }
+
+  form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  label {
+    font-weight: 600;
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+  }
+
+  input,
+  textarea {
+    padding: 0.6rem;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    font-family: inherit;
+  }
+
+  .btn-publicar {
+    margin-top: 1rem;
+    padding: 0.7rem;
+    background: #1f7a4d;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+
+  .btn-publicar:hover {
+    background: #17603c;
+  }
+
+  #mensaje {
+    min-height: 1.2rem;
+    color: #1f7a4d;
+    font-weight: 600;
+    margin: 0.5rem 0 0;
+  }
+</style>

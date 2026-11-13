@@ -1,0 +1,208 @@
+---
+// src/pages/ser-vendedor.astro
+---
+
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Quiero ser vendedor · Ecovilla</title>
+  </head>
+  <body>
+    <main class="contenedor">
+      <h1>Quiero ser vendedor</h1>
+      <p>Cuéntanos sobre tu trabajo artesanal. Revisaremos tus respuestas antes de activar tu catálogo.</p>
+
+      <form id="formulario-vendedor">
+        <label>
+          Nombre completo *
+          <input name="nombre" type="text" required />
+        </label>
+
+        <label>
+          Correo electrónico *
+          <input name="correo" type="email" required />
+        </label>
+
+        <label>
+          Teléfono / WhatsApp *
+          <input name="telefono" type="tel" required />
+        </label>
+
+        <label>
+          ¿Qué elaboras? *
+          <textarea name="producto" rows="3" required></textarea>
+        </label>
+
+        <label>
+          ¿Hace cuánto tiempo trabajas en esto? *
+          <select name="experiencia" required>
+            <option value="">Selecciona una opción</option>
+            <option value="menos-1">Menos de 1 año</option>
+            <option value="1-3">Entre 1 y 3 años</option>
+            <option value="3-10">Entre 3 y 10 años</option>
+            <option value="mas-10">Más de 10 años</option>
+          </select>
+        </label>
+
+        <label>
+          ¿Dónde vendes actualmente? *
+          <textarea name="canales" rows="3" required></textarea>
+        </label>
+
+        <label>
+          ¿Por qué quieres vender en Ecovilla? *
+          <textarea name="motivacion" rows="4" required></textarea>
+        </label>
+
+        <label class="check">
+          <input name="acepto" type="checkbox" required />
+          Confirmo que la información es veraz y acepto las normas de la comunidad.
+        </label>
+
+        <button type="submit">Enviar solicitud</button>
+        <p id="mensaje" role="status"></p>
+      </form>
+
+      <p class="volver"><a href="/">← Volver al inicio</a></p>
+    </main>
+
+    <style>
+      .contenedor {
+        max-width: 640px;
+        margin: 2rem auto;
+        padding: 0 1.25rem;
+        font-family: system-ui, sans-serif;
+        color: #1f2a24;
+      }
+      h1 {
+        color: #1f4d3a;
+        margin-bottom: 0.5rem;
+      }
+      form {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        margin-top: 1.5rem;
+      }
+      label {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+        font-weight: 600;
+        font-size: 0.95rem;
+      }
+      input,
+      textarea,
+      select {
+        font: inherit;
+        font-weight: 400;
+        padding: 0.6rem 0.75rem;
+        border: 1px solid #c9d3cd;
+        border-radius: 8px;
+        background: #fff;
+      }
+      input:focus,
+      textarea:focus,
+      select:focus {
+        outline: 2px solid #1f4d3a;
+        outline-offset: 1px;
+      }
+      .check {
+        flex-direction: row;
+        align-items: flex-start;
+        gap: 0.6rem;
+        font-weight: 400;
+        font-size: 0.9rem;
+      }
+      .check input {
+        width: auto;
+        margin-top: 0.2rem;
+      }
+      button {
+        font: inherit;
+        font-weight: 600;
+        padding: 0.85rem;
+        border: none;
+        border-radius: 8px;
+        background: #1f4d3a;
+        color: #fff;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #163a2c;
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      #mensaje {
+        margin: 0.5rem 0 0;
+        font-size: 0.9rem;
+        min-height: 1.2em;
+      }
+      #mensaje.error {
+        color: #a33a2c;
+      }
+      #mensaje.ok {
+        color: #1f4d3a;
+      }
+      .volver {
+        margin-top: 2rem;
+        font-size: 0.9rem;
+      }
+      .volver a {
+        color: #1f4d3a;
+      }
+    </style>
+
+    <script>
+      import { supabase } from '../lib/supabase';
+
+      const { data: { session } } = await supabase.auth.getSession();
+
+      // Sin sesión no se puede solicitar ser vendedor
+      if (!session) {
+        window.location.href = '/entrar';
+      }
+
+      const formulario = document.getElementById('formulario-vendedor') as HTMLFormElement;
+      const mensaje = document.getElementById('mensaje') as HTMLParagraphElement;
+
+      formulario?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        mensaje.className = '';
+        mensaje.textContent = 'Enviando…';
+
+        const boton = formulario.querySelector('button[type="submit"]') as HTMLButtonElement;
+        boton.disabled = true;
+
+        const datos = new FormData(formulario);
+
+        const { error } = await supabase.from('solicitudes_vendedor').insert({
+          user_id: session?.user.id,
+          correo: session?.user.email,
+          nombre: datos.get('nombre'),
+          telefono: datos.get('telefono'),
+          producto: datos.get('producto'),
+          experiencia: datos.get('experiencia'),
+          canales: datos.get('canales'),
+          motivacion: datos.get('motivacion'),
+          estado: 'pendiente',
+        });
+
+        boton.disabled = false;
+
+        if (error) {
+          mensaje.className = 'error';
+          mensaje.textContent = 'No se pudo enviar: ' + error.message;
+          return;
+        }
+
+        mensaje.className = 'ok';
+        mensaje.textContent = '¡Listo! Recibimos tu solicitud. Te avisaremos cuando sea revisada.';
+        formulario.reset();
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,149 @@
+---
+---
+
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Panel del comprador · Ecovilla</title>
+    <style>
+      :root {
+        --verde: #1f5c4a;
+        --crema: #faf3e8;
+        --texto: #2f2f2f;
+        --gris: #6b6b6b;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+        background: var(--crema);
+        color: var(--texto);
+      }
+
+      .barra {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1rem 1.5rem;
+        background: #fff;
+        border-bottom: 1px solid #e6ded2;
+      }
+
+      .barra h2 {
+        margin: 0;
+        color: var(--verde);
+        font-size: 1.25rem;
+      }
+
+      .contenido {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 2.5rem 1.5rem;
+      }
+
+      .contenido h1 {
+        color: var(--verde);
+        margin-top: 0;
+      }
+
+      .contenido > p {
+        color: var(--gris);
+        line-height: 1.6;
+      }
+
+      .tarjetas {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1rem;
+        margin-top: 2rem;
+      }
+
+      .tarjeta {
+        display: block;
+        background: #fff;
+        border: 1px solid #e6ded2;
+        border-radius: 12px;
+        padding: 1.25rem;
+        text-decoration: none;
+        color: inherit;
+        transition: border-color 0.15s, transform 0.15s;
+      }
+
+      .tarjeta:hover {
+        border-color: var(--verde);
+        transform: translateY(-2px);
+      }
+
+      .tarjeta h3 {
+        margin: 0 0 0.5rem;
+        color: var(--verde);
+        font-size: 1rem;
+      }
+
+      .tarjeta p {
+        margin: 0;
+        font-size: 0.9rem;
+        color: var(--gris);
+      }
+
+      .boton-salir {
+        background: transparent;
+        border: 1px solid var(--verde);
+        color: var(--verde);
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .boton-salir:hover {
+        background: var(--verde);
+        color: #fff;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="barra">
+      <h2>Ecovilla</h2>
+      <button class="boton-salir" id="salir">Salir</button>
+    </div>
+
+    <main class="contenido">
+      <h1>Panel del comprador</h1>
+      <p>Bienvenida. Aquí podrás ver tus pedidos y explorar el catálogo de la comunidad.</p>
+
+      <div class="tarjetas">
+        <a class="tarjeta" href="/mis-pedidos">
+          <h3>Mis pedidos</h3>
+          <p>Todavía no tienes pedidos.</p>
+        </a>
+        <a class="tarjeta" href="/catalogo">
+          <h3>Catálogo</h3>
+          <p>Explora los productos de los vendedores de Ecovilla.</p>
+        </a>
+        <a class="tarjeta" href="/ser-vendedor">
+          <h3>Quiero vender</h3>
+          <p>Conviértete en vendedor y publica tus productos.</p>
+        </a>
+      </div>
+    </main>
+
+    <script>
+      import { supabase } from '../lib/supabase';
+
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session) {
+        window.location.href = '/entrar';
+      }
+
+      document.getElementById('salir')?.addEventListener('click', async () => {
+        await supabase.auth.signOut();
+        window.location.href = '/entrar';
+      });
+    </script>
+  </body>
+</html>

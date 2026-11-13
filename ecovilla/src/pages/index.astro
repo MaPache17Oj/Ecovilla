@@ -1,0 +1,21 @@
+<script>
+  import { supabase } from '../lib/supabase';
+
+  const { data: { session } } = await supabase.auth.getSession();
+
+  if (!session) {
+    window.location.href = '/entrar';
+  } else {
+    const { data: perfil } = await supabase
+      .from('perfiles')
+      .select('rol')
+      .eq('id', session.user.id)
+      .single();
+
+    if (perfil?.rol === 'vendedor') {
+      window.location.href = '/panel-vendedor';
+    } else {
+      window.location.href = '/panel-comprador';
+    }
+  }
+</script>

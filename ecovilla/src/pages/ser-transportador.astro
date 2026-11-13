@@ -1,0 +1,96 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Quiero ser transportador — Ecovilla">
+  <main class="contenedor">
+    <h1>Quiero ser transportador</h1>
+    <p class="intro">
+      Ofrece tus servicios de transporte para llevar los productos del campo
+      desde el vendedor hasta el comprador.
+    </p>
+
+    <form id="form-transportador">
+      <label for="nombre">Nombre completo</label>
+      <input type="text" id="nombre" required />
+
+      <label for="telefono">Teléfono</label>
+      <input type="tel" id="telefono" required />
+
+      <label for="ciudad">Ciudad</label>
+      <input type="text" id="ciudad" required />
+
+      <label for="vehiculo">Tipo de vehículo</label>
+      <input type="text" id="vehiculo" placeholder="Camioneta, moto, camión..." required />
+
+      <label for="capacidad">Capacidad de carga</label>
+      <input type="text" id="capacidad" placeholder="Ej: 500 kg" required />
+
+      <button type="submit" id="enviar">Registrarme como transportador</button>
+    </form>
+
+    <p id="mensaje"></p>
+  </main>
+</Layout>
+
+<script>
+  import { supabase } from '../lib/supabase';
+
+  const form = document.getElementById('form-transportador') as HTMLFormElement;
+  const mensaje = document.getElementById('mensaje') as HTMLParagraphElement;
+
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) {
+      window.location.href = '/entrar';
+      return;
+    }
+
+    const { error } = await supabase.from('transportadores').insert({
+      usuario_id: data.user.id,
+      nombre: (document.getElementById('nombre') as HTMLInputElement).value,
+      telefono: (document.getElementById('telefono') as HTMLInputElement).value,
+      ciudad: (document.getElementById('ciudad') as HTMLInputElement).value,
+      vehiculo: (document.getElementById('vehiculo') as HTMLInputElement).value,
+      capacidad: (document.getElementById('capacidad') as HTMLInputElement).value,
+    });
+
+    if (error) {
+      mensaje.textContent = 'Error: ' + error.message;
+      mensaje.style.color = 'red';
+      return;
+    }
+
+    mensaje.textContent = '¡Listo! Ya estás registrado como transportador.';
+    mensaje.style.color = 'green';
+    form.reset();
+  });
+</script>
+
+<style>
+  .contenedor { max-width: 600px; margin: 3rem auto; padding: 0 1.5rem; }
+  h1 { color: #1f7a4d; }
+  .intro { margin-bottom: 2rem; color: #444; }
+  form { display: flex; flex-direction: column; gap: 0.4rem; }
+  label { font-weight: 600; margin-top: 0.8rem; }
+  input {
+    padding: 0.7rem;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    font-size: 1rem;
+  }
+  #enviar {
+    margin-top: 1.5rem;
+    width: 100%;
+    background: #1f7a4d;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 0.9rem;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+  #mensaje { margin-top: 1rem; font-weight: 600; }
+</style>

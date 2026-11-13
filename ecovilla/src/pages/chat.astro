@@ -1,0 +1,143 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Chat — Ecovilla">
+  <main class="contenedor">
+    <h1>Chat con el vendedor</h1>
+    <p id="subtitulo" class="subtitulo"></p>
+
+    <div id="historial"></div>
+
+    <form id="form-mensaje">
+      <input type="text" id="texto" placeholder="Escribe un mensaje..." required />
+      <button type="submit">Enviar</button>
+    </form>
+  </main>
+</Layout>
+
+<script>
+  import { supabase } from '../lib/supabase';
+
+  const params = new URLSearchParams(window.location.search);
+  const vendedorId = params.get('vendedor');
+  const productoId = params.get('producto');
+
+  const historial = document.getElementById('historial') as HTMLDivElement;
+  const subtitulo = document.getElementById('subtitulo') as HTMLParagraphElement;
+  let user: any = null;
+
+  async function cargarMensajes() {
+    if (!user || !vendedorId) return;
+
+    const { data, error } = await supabase
+      .from('mensajes')
+      .select('*')
+      .eq('comprador_id', user.id)
+      .eq('vendedor_id', vendedorId)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      historial.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+      return;
+    }
+
+    historial.innerHTML = (data || [])
+      .map(
+        (m) =>
+          `<div class="msg ${m.emisor_id === user.id ? 'mio' : 'suyo'}">${m.contenido}</div>`
+      )
+      .join('');
+
+    historial.scrollTop = historial.scrollHeight;
+  }
+
+  (async () => {
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) {
+      window.location.href = '/entrar';
+      return;
+    }
+    user = data.user;
+
+    if (productoId) {
+      const { data: prod } = await supabase
+        .from('productos')
+        .select('nombre')
+        .eq('id', productoId)
+        .single();
+      if (prod) subtitulo.textContent = `Sobre: ${prod.nombre}`;
+    }
+
+    await cargarMensajes();
+
+    supabase
+      .channel('mensajes-nuevos')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'mensajes' },
+        () => cargarMensajes()
+      )
+      .subscribe();
+  })();
+
+  document.getElementById('form-mensaje')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const input = document.getElementById('texto') as HTMLInputElement;
+    if (!input.value.trim() || !user || !vendedorId) return;
+
+    const { error } = await supabase.from('mensajes').insert({
+      comprador_id: user.id,
+      vendedor_id: vendedorId,
+      emisor_id: user.id,
+      contenido: input.value.trim(),
+    });
+
+    if (error) {
+      alert('No se pudo enviar: ' + error.message);
+      return;
+    }
+
+    input.value = '';
+    await cargarMensajes();
+  });
+</script>
+
+<style>
+  .contenedor { max-width: 700px; margin: 3rem auto; padding: 0 1.5rem; }
+  h1 { color: #1f7a4d; }
+  .subtitulo { color: #666; margin-bottom: 1rem; }
+  #historial {
+    height: 400px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    background: #fafafa;
+  }
+  .msg { padding: 0.6rem 0.9rem; border-radius: 12px; max-width: 75%; }
+  .mio { background: #1f7a4d; color: #fff; align-self: flex-end; }
+  .suyo { background: #e8e8e8; color: #222; align-self: flex-start; }
+  .error { color: red; }
+  #form-mensaje { display: flex; gap: 0.5rem; }
+  #texto {
+    flex: 1;
+    padding: 0.8rem;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    font-size: 1rem;
+  }
+  #form-mensaje button {
+    background: #1f7a4d;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 0 1.5rem;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+</style>

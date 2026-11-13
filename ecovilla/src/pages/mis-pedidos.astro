@@ -1,0 +1,195 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Mis pedidos">
+  <header class="barra">
+    <span class="marca">Ecovilla</span>
+    <nav>
+      <a href="/catalogo">← Seguir comprando</a>
+      <a href="/carrito">Mi carrito →</a>
+    </nav>
+  </header>
+
+  <main class="contenedor">
+    <h1>Mis pedidos</h1>
+    <p class="aviso">Aquí aparecen los pedidos que ya confirmaste.</p>
+    <div id="lista-pedidos"><p>Cargando...</p></div>
+  </main>
+</Layout>
+
+<script>
+  import { supabase } from '../lib/supabase';
+
+  const contenedor = document.getElementById('lista-pedidos') as HTMLDivElement;
+
+  const { data: { session } } = await supabase.auth.getSession();
+
+  if (!session) {
+    window.location.href = '/entrar';
+  } else {
+    cargarPedidos(session.user.id);
+  }
+
+  async function cargarPedidos(usuarioId: string) {
+    const { data: pedidos, error } = await supabase
+      .from('pedidos')
+      .select('id, total, estado, created_at')
+      .eq('comprador_id', usuarioId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      contenedor.innerHTML = '<p>Error: ' + error.message + '</p>';
+      return;
+    }
+
+    if (!pedidos || pedidos.length === 0) {
+      contenedor.innerHTML = '<p>Todavía no tienes pedidos.</p>';
+      return;
+    }
+
+    const ids = pedidos.map((p) => p.id);
+
+    const { data: items, error: errItems } = await supabase
+      .from('pedido_items')
+      .select('pedido_id, producto_id, cantidad, precio_unitario')
+      .in('pedido_id', ids);
+
+    if (errItems) {
+      contenedor.innerHTML = '<p>Error: ' + errItems.message + '</p>';
+      return;
+    }
+
+    const prodIds = [...new Set((items ?? []).map((i) => i.producto_id))];
+
+    const { data: productos } = await supabase
+      .from('productos')
+      .select('id, nombre, imagen_url')
+      .in('id', prodIds);
+
+    contenedor.innerHTML = pedidos.map((pedido) => {
+      const suyos = (items ?? []).filter((i) => i.pedido_id === pedido.id);
+
+      const filas = suyos.map((item) => {
+        const prod = productos?.find((p) => p.id === item.producto_id);
+        const imagen = prod?.imagen_url
+          ? `<img src="${prod.imagen_url}" alt="${prod.nombre}" />`
+          : '<div class="sin-imagen"></div>';
+        const subtotal = Number(item.precio_unitario) * item.cantidad;
+        return `<li>
+          ${imagen}
+          <span class="nombre">${prod?.nombre ?? 'Producto'}</span>
+          <span class="cantidad">x${item.cantidad}</span>
+          <span class="total">$${subtotal.toLocaleString('es-CO')}</span>
+        </li>`;
+      }).join('');
+
+      const fecha = new Date(pedido.created_at).toLocaleDateString('es-CO', {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+      });
+
+      return `<article class="pedido">
+        <div class="cabecera">
+          <span class="numero">Pedido #${pedido.id.slice(0, 8)}</span>
+          <span class="estado">${pedido.estado}</span>
+          <span class="fecha">${fecha}</span>
+        </div>
+        ${suyos.length
+          ? `<ul class="lista">${filas}</ul>`
+          : '<p class="vacio">Este pedido no tiene productos guardados.</p>'}
+        <p class="gran-total">Total: $${Number(pedido.total).toLocaleString('es-CO')}</p>
+      </article>`;
+    }).join('');
+  }
+</script>
+
+<style>
+  .barra {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    background: #fff;
+    border-bottom: 1px solid #e5e5e5;
+  }
+
+  .barra nav { display: flex; gap: 1.25rem; }
+
+  .barra a { color: #1f7a4d; text-decoration: none; }
+
+  .marca { font-weight: 700; color: #1f7a4d; }
+
+  .contenedor { max-width: 800px; margin: 2.5rem auto; padding: 0 1.5rem; }
+
+  h1 { color: #1f7a4d; }
+
+  .aviso { color: #666; margin-top: -0.5rem; margin-bottom: 1.5rem; }
+
+  .pedido {
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    border-radius: 10px;
+    padding: 1.25rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .cabecera {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid #eee;
+  }
+
+  .numero { font-weight: 700; }
+
+  .estado {
+    background: #fdf3d7;
+    color: #8a6d1f;
+    border-radius: 999px;
+    padding: 0.15rem 0.6rem;
+    font-size: 0.85rem;
+  }
+
+  .fecha { color: #666; font-size: 0.9rem; margin-left: auto; }
+
+  .lista {
+    list-style: none;
+    padding: 0;
+    margin: 0.75rem 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .lista li { display: flex; align-items: center; gap: 0.9rem; }
+
+  .lista li img {
+    width: 48px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: 8px;
+    flex-shrink: 0;
+  }
+
+  .sin-imagen {
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
+    background: #eee;
+    flex-shrink: 0;
+  }
+
+  .nombre { font-weight: 600; }
+
+  .cantidad { color: #666; font-size: 0.9rem; }
+
+  .total { margin-left: auto; font-weight: 600; }
+
+  .vacio { color: #888; font-style: italic; }
+
+  .gran-total { font-weight: 700; text-align: right; margin: 0.5rem 0 0; }
+</style>

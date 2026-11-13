@@ -1,0 +1,221 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Mi carrito">
+  <header class="barra">
+    <span class="marca">Ecovilla</span>
+    <nav>
+      <a href="/catalogo">← Seguir comprando</a>
+      <a href="/mis-pedidos">Mis pedidos →</a>
+    </nav>
+  </header>
+
+  <main class="contenedor">
+    <h1>Mi carrito</h1>
+    <p class="aviso">Estos productos aún no son un pedido. Confirma para generarlo.</p>
+    <div id="lista-carrito"><p>Cargando...</p></div>
+    <div id="resumen"></div>
+  </main>
+</Layout>
+
+<script>
+  import { supabase } from '../lib/supabase';
+
+  const contenedor = document.getElementById('lista-carrito') as HTMLDivElement;
+  const resumen = document.getElementById('resumen') as HTMLDivElement;
+
+  const { data: { session } } = await supabase.auth.getSession();
+
+  if (!session) {
+    window.location.href = '/entrar';
+  } else {
+    cargarCarrito(session.user.id);
+  }
+
+  async function cargarCarrito(usuarioId: string) {
+    const { data: items, error } = await supabase
+      .from('carrito')
+      .select('id, producto_id, cantidad')
+      .eq('comprador_id', usuarioId);
+
+    if (error) {
+      contenedor.innerHTML = '<p>Error: ' + error.message + '</p>';
+      return;
+    }
+
+    if (!items || items.length === 0) {
+      contenedor.innerHTML = '<p>Tu carrito está vacío.</p>';
+      resumen.innerHTML = '';
+      return;
+    }
+
+    const ids = items.map((i) => i.producto_id);
+
+    const { data: productos, error: errProd } = await supabase
+      .from('productos')
+      .select('id, nombre, precio, imagen_url, vendedor_id')
+      .in('id', ids);
+
+    if (errProd) {
+      contenedor.innerHTML = '<p>Error: ' + errProd.message + '</p>';
+      return;
+    }
+
+    const total = items.reduce((sum, item) => {
+      const prod = productos?.find((p) => p.id === item.producto_id);
+      return sum + (prod ? Number(prod.precio) * item.cantidad : 0);
+    }, 0);
+
+    contenedor.innerHTML = '<ul class="lista">' + items.map((item) => {
+      const prod = productos?.find((p) => p.id === item.producto_id);
+      if (!prod) return '';
+      const imagen = prod.imagen_url
+        ? `<img src="${prod.imagen_url}" alt="${prod.nombre}" />`
+        : '<div class="sin-imagen"></div>';
+      return `<li>
+        ${imagen}
+        <span class="nombre">${prod.nombre}</span>
+        <span class="cantidad">x${item.cantidad}</span>
+        <span class="total">$${Number(prod.precio).toLocaleString('es-CO')}</span>
+        <button class="quitar" data-id="${item.id}">Quitar</button>
+      </li>`;
+    }).join('') + '</ul>';
+
+    resumen.innerHTML = `
+      <p class="gran-total">Total: $${total.toLocaleString('es-CO')}</p>
+      <button id="confirmar">Confirmar pedido</button>
+    `;
+
+    document.querySelectorAll('.quitar').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = (btn as HTMLButtonElement).dataset.id;
+        await supabase.from('carrito').delete().eq('id', id);
+        cargarCarrito(usuarioId);
+      });
+    });
+
+    document.getElementById('confirmar')?.addEventListener('click', async () => {
+      const { data: pedido, error: errPedido } = await supabase
+        .from('pedidos')
+        .insert({
+          comprador_id: usuarioId,
+          total: total,
+          estado: 'pendiente',
+        })
+        .select()
+        .single();
+
+      if (errPedido || !pedido) {
+        alert('Error: ' + (errPedido?.message ?? 'no se pudo crear el pedido'));
+        return;
+      }
+
+      const filas = items.map((item) => {
+        const prod = productos?.find((p) => p.id === item.producto_id);
+        return {
+          pedido_id: pedido.id,
+          producto_id: item.producto_id,
+          cantidad: item.cantidad,
+          precio_unitario: Number(prod?.precio ?? 0),
+          vendedor_id: prod?.vendedor_id ?? null,
+        };
+      });
+
+      const { error: errItems } = await supabase.from('pedido_items').insert(filas);
+
+      if (errItems) {
+        alert('Error al guardar los productos: ' + errItems.message);
+        return;
+      }
+
+      await supabase.from('carrito').delete().eq('comprador_id', usuarioId);
+      window.location.href = '/mis-pedidos';
+    });
+  }
+</script>
+
+<style>
+  .barra {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    background: #fff;
+    border-bottom: 1px solid #e5e5e5;
+  }
+
+  .barra nav { display: flex; gap: 1.25rem; }
+
+  .barra a { color: #1f7a4d; text-decoration: none; }
+
+  .marca { font-weight: 700; color: #1f7a4d; }
+
+  .contenedor { max-width: 800px; margin: 2.5rem auto; padding: 0 1.5rem; }
+
+  h1 { color: #1f7a4d; }
+
+  .aviso { color: #666; margin-top: -0.5rem; margin-bottom: 1.5rem; }
+
+  .lista {
+    list-style: none;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .lista li {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    border-radius: 10px;
+    padding: 1rem;
+  }
+
+  .lista li img {
+    width: 64px;
+    height: 64px;
+    object-fit: cover;
+    border-radius: 8px;
+    flex-shrink: 0;
+  }
+
+  .sin-imagen {
+    width: 64px;
+    height: 64px;
+    border-radius: 8px;
+    background: #eee;
+    flex-shrink: 0;
+  }
+
+  .nombre { font-weight: 600; }
+
+  .cantidad { color: #666; font-size: 0.9rem; }
+
+  .total { margin-left: auto; font-weight: 700; }
+
+  .quitar {
+    background: none;
+    border: 1px solid #c0392b;
+    color: #c0392b;
+    border-radius: 6px;
+    padding: 0.35rem 0.7rem;
+    cursor: pointer;
+  }
+
+  .gran-total { font-size: 1.2rem; font-weight: 700; margin-top: 1.5rem; }
+
+  #confirmar {
+    width: 100%;
+    background: #1f7a4d;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 0.9rem;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+</style>
